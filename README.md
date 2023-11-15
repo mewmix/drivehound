@@ -1,5 +1,5 @@
 # drivehound
-magic file signatures + python drive recovery magic 
+magic file signatures + python drive recovery magic in pure python(or pure python builtins ;3 )
 
 ## install and use
 
