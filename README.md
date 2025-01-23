@@ -1,5 +1,7 @@
 # drivehound
 
+![CI](https://github.com/mewmix/drivehound/actions/workflows/python-package.yml/badge.svg)
+
 ## install
 
 ```sh
