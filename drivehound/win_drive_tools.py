@@ -36,6 +36,8 @@ def open_windows_partition(
     closefd=True,
     opener=None
 ):
+    """Opens a Windows drive partition in raw mode."""
+    letter = letter.rstrip(":")  # Ensure only one colon
     return open(
         fr"\\.\{letter}:",
         mode,
@@ -46,6 +48,7 @@ def open_windows_partition(
         closefd,
         opener
     )
+
 
 class DriveChunkReader:
     """
@@ -73,33 +76,21 @@ class DriveChunkReader:
     def close(self):
         self.file_obj.close()
 
-def open_drive(drive, mode='rb', sector_size=None, chunk_size=None):
+def open_drive(drive, mode="rb", sector_size=None, chunk_size=None):
     """
-    Extended to optionally return a DriveChunkReader if both sector_size
-    and chunk_size are provided. Otherwise returns a raw file handle.
+    Opens a Windows or POSIX drive, detecting whether the input is a physical drive or a file.
     """
-    if os.name == 'posix':
-        if isinstance(drive, str):
-            f = open(drive, mode)
-        else:
-            raise ValueError("On POSIX systems, 'drive' must be a string like '/dev/sda'.")
-    elif os.name == 'nt':
-        if isinstance(drive, str):
-            f = open_windows_partition(drive, mode=mode)
-        elif isinstance(drive, int):
-            f = open_physical_drive(drive, mode=mode)
-        else:
-            raise ValueError("On Windows, 'drive' must be a letter (e.g. 'C') or an integer.")
+    if os.path.exists(drive):  # If it's a file, open normally
+        f = open(drive, mode)
+    elif os.name == "nt":
+        f = open_windows_partition(drive, mode=mode)
     else:
-        raise OSError("Unsupported OS.")
+        f = open(drive, mode)  # Assume a raw device path in Linux/macOS
 
-    # If sector_size and chunk_size are given, use the chunk-reading wrapper
     if sector_size is not None and chunk_size is not None:
         return DriveChunkReader(f, sector_size, chunk_size)
-    else:
-        # Return the raw file object for backwards compatibility
-        return f
-
+    
+    return f
 def list_partitions():
     """
     Lists available partitions on the system.
