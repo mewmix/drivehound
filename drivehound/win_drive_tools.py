@@ -1,9 +1,11 @@
-# In win_drive_tools.py
+# drivehound/win_drive_tools.py
 
 import os
 import binascii
 import subprocess
 from pathlib import Path
+import re
+import logging
 
 def open_physical_drive(
     number,
@@ -49,7 +51,6 @@ def open_windows_partition(
         opener
     )
 
-
 class DriveChunkReader:
     """
     A minimal context manager that wraps a file-like object
@@ -79,18 +80,43 @@ class DriveChunkReader:
 def open_drive(drive, mode="rb", sector_size=None, chunk_size=None):
     """
     Opens a Windows or POSIX drive, detecting whether the input is a physical drive or a file.
+
+    Args:
+        drive (str): The drive identifier (e.g., 'C:', '\\.\PhysicalDrive0', '/dev/sda1')
+        mode (str): Mode to open the drive/file (default 'rb')
+        sector_size (int, optional): Sector size for chunk reading
+        chunk_size (int, optional): Chunk size for reading
+
+    Returns:
+        File object or DriveChunkReader: Depending on the parameters
     """
-    if os.path.exists(drive):  # If it's a file, open normally
+    # Regular expression to match drive letters like 'E:'
+    drive_letter_pattern = re.compile(r'^[A-Za-z]:$')
+
+    logging.debug(f"Attempting to open drive: {drive} with mode: {mode}")
+
+    if drive_letter_pattern.match(drive):
+        # It's a drive letter, open as partition
+        logging.debug(f"Detected drive letter: {drive}")
+        f = open_windows_partition(drive, mode=mode)
+    elif os.path.isfile(drive):
+        # It's a regular file
+        logging.debug(f"Detected regular file: {drive}")
         f = open(drive, mode)
     elif os.name == "nt":
+        # It's a physical drive or other special device
+        logging.debug(f"Detected special device on Windows: {drive}")
         f = open_windows_partition(drive, mode=mode)
     else:
-        f = open(drive, mode)  # Assume a raw device path in Linux/macOS
+        # Assume a raw device path in Linux/macOS
+        logging.debug(f"Detected POSIX raw device path: {drive}")
+        f = open(drive, mode)
 
     if sector_size is not None and chunk_size is not None:
         return DriveChunkReader(f, sector_size, chunk_size)
     
     return f
+
 def list_partitions():
     """
     Lists available partitions on the system.
@@ -119,10 +145,9 @@ def list_partitions():
                     partitions.append(line)  # Only add the drive letter (e.g., "C:")
 
     except subprocess.CalledProcessError:
-        print("Error: Unable to list partitions.")
+        logging.error("Error: Unable to list partitions.")
     
     return partitions
-
 
 def binary_to_hex(binary_data):
     return binascii.hexlify(binary_data).decode('utf-8')
