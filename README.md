@@ -1,20 +1,37 @@
 # drivehound
-magic file signatures + python drive recovery magic in pure python(or pure python builtins ;3 )
 
-## install and use
+## install
 
+```sh
+git clone https://github.com/mewmix/drivehound && cd drivehound
+pip install .
 ```
 
-git clone https://github.com/mewmix/drivehound
+## usage
 
-cd drivehound
+run interactive recovery tool:
 
+```sh
+drivehound-recover
 ```
 
-Edit recovery_tester.py with the drive path you want, in my example I have 
+or import and use as a library:
 
-```
-recover_data(drive=1)
+```python
+from drivehound import Hound
+hound = Hound()
+hound.recover_files(drive="/dev/sda")
 ```
 
-Where drive=1 means physical disk 1 in Windows; the function is cross platform and will accept linux / mac paths or windows number & letter schemes. 
+## testing
+
+```sh
+pytest
+```
+
+## features
+
+- signature-based carving
+- cross-platform (linux, mac, windows)
+- pure python, no dependencies
+
