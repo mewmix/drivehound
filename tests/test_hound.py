@@ -3,7 +3,9 @@ import platform
 from unittest.mock import patch, MagicMock
 from drivehound.hound import Hound
 import drivehound.win_drive_tools  # Import the module instead of individual functions
+import io
 
+from drivehound.file_signatures import FILE_SIGNATURES
 @pytest.fixture
 def hound():
     """Fixture to initialize Hound instance."""
@@ -104,3 +106,54 @@ def test_hound_recover_files_mocked(mock_open_drive, hound, tmp_path):
         chunk_size=hound.chunk_size
     )
     mock_reader.read_chunk.assert_called_once()
+@patch("drivehound.hound.open_drive")
+def test_hound_no_valid_signatures(mock_open_drive):
+    sigs = {"foo": (None, b"end", ".bin")}
+    h = Hound(signatures=sigs, verbose=False)
+    result = h.recover_files("dummy")
+    assert result == {}
+    mock_open_drive.assert_not_called()
+
+
+@patch("drivehound.hound.open_drive")
+def test_hound_recover_files_basic(mock_open_drive, tmp_path):
+    data = b"STARTdataEND"
+    def fake_open(*a, **k):
+        buf = io.BytesIO(data)
+        return drivehound.win_drive_tools.DriveChunkReader(buf, 1, len(data))
+    mock_open_drive.side_effect = fake_open
+    sigs = {"foo": (b"START", b"END", ".bin")}
+    h = Hound(signatures=sigs, output_dir=str(tmp_path), verbose=False, chunk_size=len(data))
+    result = h.recover_files("dummy")
+    assert result == {"foo": 1}
+    recovered = (tmp_path / "foo_0.bin").read_bytes()
+    assert recovered == b"STARTdataEND"
+@patch("drivehound.hound.open_drive")
+def test_hound_multiple_files(mock_open_drive, tmp_path):
+    data = b"SToneEDxxSTtwoED"
+    def fake_open(*a, **k):
+        buf = io.BytesIO(data)
+        return drivehound.win_drive_tools.DriveChunkReader(buf, 1, len(data))
+    mock_open_drive.side_effect = fake_open
+    sigs = {"foo": (b"ST", b"ED", ".bin")}
+    h = Hound(signatures=sigs, output_dir=str(tmp_path), verbose=False, chunk_size=len(data))
+    result = h.recover_files("dummy")
+    assert result == {"foo": 1}
+    assert (tmp_path / "foo_0.bin").read_bytes() == data
+@patch("drivehound.hound.open_drive")
+def test_hound_no_end_signature(mock_open_drive, tmp_path):
+    data = b"STdata1STdata2"
+    def fake_open(*a, **k):
+        buf = io.BytesIO(data)
+        return drivehound.win_drive_tools.DriveChunkReader(buf, 1, len(data))
+    mock_open_drive.side_effect = fake_open
+    sigs = {"foo": (b"ST", None, ".bin")}
+    h = Hound(signatures=sigs, output_dir=str(tmp_path), verbose=False, chunk_size=len(data))
+    result = h.recover_files("dummy")
+    assert result == {"foo": 1}
+    assert (tmp_path / "foo_0.bin").read_bytes() == b"STdata1STdata2"
+
+
+def test_hound_invalid_target(tmp_path):
+    with pytest.raises(ValueError):
+        Hound(signatures=FILE_SIGNATURES, target_filetype="unknown")
